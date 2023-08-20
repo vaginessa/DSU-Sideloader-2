@@ -151,7 +151,7 @@ class DSUInstaller(
         val sis = SparseInputStream(
             BufferedInputStream(inputStream),
         )
-        val partitionSize = if (sis.unsparseSize != -1L) sis.unsparseSize else uncompressedSize
+        val partitionSize = if (sis.unsparseSize != -1L) sis.unsparseSize else uncompressedSizepartitionSize
         onCreatePartition(partition)
         createNewPartition(partition, partitionSize, readOnly)
         onInstallationStepUpdate(InstallationStep.INSTALLING_ROOTED)
@@ -230,76 +230,8 @@ class DSUInstaller(
         forceStopDSU()
         startInstallation(Constants.DEFAULT_SLOT)
         installWritablePartition("userdata", userdataSize)
-        when (dsuInstallation.type) {
-            Type.SINGLE_SYSTEM_IMAGE -> {
-                installImage(
-                    "system",
-                    dsuInstallation.fileSize,
-                    dsuInstallation.uri,
-                )
-            }
-
-            Type.MULTIPLE_IMAGES -> {
-                installImages(dsuInstallation.images)
-            }
-
-            Type.DSU_PACKAGE -> {
-                installStreamingZipUpdate(openInputStream(dsuInstallation.uri))
-            }
-
-            Type.URL -> {
-                val url = URL(dsuInstallation.uri.toString())
-                installStreamingZipUpdate(url.openStream())
-            }
-
-            else -> {}
-        }
-        if (!installationJob.isCancelled) {
-            finishInstallation()
-            Log.d(tag, "Installation finished successfully.")
-            onInstallationSuccess()
-        }
-    }
-
-    private fun installImages(images: List<ImagePartition>) {
-        for (image in images) {
-            if (isPartitionSupported(image.partitionName)) {
-                installImage(image.partitionName, image.fileSize, image.uri)
-            }
-            if (installationJob.isCancelled) {
-                remove()
-            }
-        }
-    }
-
-    private fun installImage(partitionName: String, uncompressedSize: Long, uri: Uri) {
-        installImage(
-            partitionName,
-            uncompressedSize,
-            openInputStream(uri),
-        )
-        if (installationJob.isCancelled) {
-            remove()
-        }
-    }
-
-    fun openInputStream(uri: Uri): InputStream {
-        return application.contentResolver.openInputStream(uri)!!
-    }
-
-    fun createNewPartition(partition: String, partitionSize: Long, readOnly: Boolean) {
-        val result = createPartition(partition, partitionSize, readOnly)
-        if (result != IGsiService.INSTALL_OK) {
-            Log.d(
-                tag,
-                "Failed to create $partition partition, error code: $result (check: IGsiService.INSTALL_*)",
-            )
-            installationJob.cancel()
-            onInstallationError(InstallationStep.ERROR_CREATE_PARTITION, partition)
-        }
-    }
-
-    override fun invoke() {
-        startInstallation()
-    }
-}
+        when (dsuInstallation)
+        forceStopDSU()
+        startInstallation(Constants.DEFAULT_SLOT)
+        installWritablePartition("userdata", userdataSize)
+        when (dsuInstallation
