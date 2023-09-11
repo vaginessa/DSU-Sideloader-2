@@ -1,5 +1,5 @@
-package vegabobo.dsusideloader.installer.root
-
+package com.example.dsusideloader.installer.root
+ 
 import android.app.Application
 import android.gsi.IGsiService
 import android.net.Uri
@@ -19,12 +19,26 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.lsposed.hiddenapibypass.HiddenApiBypass
-import vegabobo.dsusideloader.model.DSUInstallationSource
-import vegabobo.dsusideloader.model.ImagePartition
-import vegabobo.dsusideloader.model.Type
-import vegabobo.dsusideloader.preparation.InstallationStep
-import vegabobo.dsusideloader.service.PrivilegedProvider
-
+import com.example.dsusideloader.model.DSUInstallationSource
+import com.example.dsusideloader.model.ImagePartition
+import com.example.dsusideloader.model.Type
+import com.example.dsusideloader.preparation.InstallationStep
+import com.example.dsusideloader.service.PrivilegedProvider
+ 
+/**
+ * DSU Installer implementation using Android APIs
+ * Based on InstallationAsyncTask from DynamicSystemInstallationService
+ * DynamicSystemInstallationService/src/com/android/dynsystem/InstallationAsyncTask.java
+ *
+ * Calling APIs directly to install images are fast, because we can apply images directly
+ * instead of preparing a file exclusively to install via DSU system-app
+ * also, having access to APIs make everything more flexible.
+ *
+ * Unfortunately, this implementation has a downside, it requires "MANAGE_DYNAMIC_SYSTEM"
+ * and this permission has a protection level of "signature".
+ *
+ * That's why this installation way requires root.
+ */
 class DSUInstaller(
     private val application: Application,
     private val userdataSize: Long,
@@ -45,17 +59,17 @@ class DSUInstaller(
         const val MIN_PROGRESS_TO_PUBLISH = (1 shl 27).toLong()
     }
  
-    private class MappedMemoryBuffer(var mBuffer: ByteBuffer?) :
+    private class MappedMemoryBuffer(var buffer: ByteBuffer?) :
         AutoCloseable {
         override fun close() {
-            if (mBuffer != null) {
-                SharedMemory.unmap(mBuffer!!)
-                mBuffer = null
+            if (buffer != null) {
+                SharedMemory.unmap(buffer!!)
+                buffer = null
             }
         }
     }
  
-    private val UNSUPPORTED_PARTITIONS: List<String> = listOf(
+    private val unsupportedPartitions: List<String> = listOf(
         "vbmeta",
         "boot",
         "userdata",
@@ -64,9 +78,9 @@ class DSUInstaller(
         "system_other",
         "scratch",
     )
-
+ 
     private fun isPartitionSupported(partitionName: String): Boolean =
-        !UNSUPPORTED_PARTITIONS.contains(partitionName)
+        !unsupportedPartitions.contains(partitionName)
  
     private fun getFdDup(sharedMemory: SharedMemory): ParcelFileDescriptor {
         return HiddenApiBypass.invoke(
@@ -128,7 +142,7 @@ class DSUInstaller(
         )
     }
  
-private fun installImage(
+    private fun installImage(
         partition: String,
         uncompressedSize: Long,
         inputStream: InputStream,
@@ -149,10 +163,10 @@ private fun installImage(
                     publishProgress(0L, partitionSize, partition)
                     var installedSize: Long = 0
                     val readBuffer = ByteArray(sharedMemory.size)
-                    val buffer = mappedBuffer.mBuffer
+                    val buffer = mappedBuffer.buffer
                     var numBytesRead: Int
                     while (0 < sis.read(readBuffer, 0, readBuffer.size)
-                        .also { numBytesRead = it }
+                            .also { numBytesRead = it }
                     ) {
                         if (installationJob.isCancelled) {
                             return
