@@ -64,7 +64,7 @@ class DSUInstaller(
         "system_other",
         "scratch",
     )
- 
+
     private fun isPartitionSupported(partitionName: String): Boolean =
         !UNSUPPORTED_PARTITIONS.contains(partitionName)
  
@@ -128,7 +128,7 @@ class DSUInstaller(
         )
     }
  
-    private fun installImage(
+private fun installImage(
         partition: String,
         uncompressedSize: Long,
         inputStream: InputStream,
@@ -215,8 +215,6 @@ class DSUInstaller(
         forceStopDSU()
         startInstallation(Constants.DEFAULT_SLOT)
         installWritablePartition("userdata", userdataSize)
-        recreatePartition("userdata")
-        recreatePartition("vendor")
         when (dsuInstallation.type) {
             Type.SINGLE_SYSTEM_IMAGE -> {
                 installImage(
@@ -251,4 +249,3 @@ class DSUInstaller(
             onInstallationSuccess()
         }
     }
-}
