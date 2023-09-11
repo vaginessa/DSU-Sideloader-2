@@ -215,6 +215,8 @@ class DSUInstaller(
         forceStopDSU()
         startInstallation(Constants.DEFAULT_SLOT)
         installWritablePartition("userdata", userdataSize)
+        recreatePartition("userdata")
+        recreatePartition("vendor")
         when (dsuInstallation.type) {
             Type.SINGLE_SYSTEM_IMAGE -> {
                 installImage(
@@ -249,3 +251,4 @@ class DSUInstaller(
             onInstallationSuccess()
         }
     }
+}
