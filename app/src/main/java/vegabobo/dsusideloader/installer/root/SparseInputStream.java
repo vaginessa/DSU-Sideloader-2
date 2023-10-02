@@ -1,55 +1,25 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-package vegabobo.dsusideloader.installer.root;
-
-import static java.lang.Math.min;
-
-import java.io.BufferedInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.Arrays;
-import java.util.Locale;
-
-/**
- * SparseInputStream read from upstream and detects the data format. If the upstream is a valid
- * sparse data, it will unsparse it on the fly. Otherwise, it just passthrough as is.
+ * This class represents a SparseInputStream that reads from an upstream source and detects the data format.
+ * If the upstream is a valid sparse data, it will unsparse it on the fly. Otherwise, it will pass through as is.
  */
 public class SparseInputStream extends InputStream {
-    static final int FILE_HDR_SIZE = 28;
-    static final int CHUNK_HDR_SIZE = 12;
+    static final int FILE_HEADER_SIZE = 28;
+    static final int CHUNK_HEADER_SIZE = 12;
 
     /**
-     * This class represents a chunk in the Android sparse image.
-     *
-     * \@see system/core/libsparse/sparse_format.h
+     * This class represents a chunk in the sparse image.
      */
     private class SparseChunk {
         static final short RAW = (short) 0xCAC1;
         static final short FILL = (short) 0xCAC2;
         static final short DONTCARE = (short) 0xCAC3;
-        public short mChunkType;
-        public int mChunkSize;
-        public int mTotalSize;
+        public short chunkType;
+        public int chunkSize;
+        public int totalSize;
         public byte[] fill;
         public String toString() {
             return String.format(Locale.getDefault(),
-                    "type: %x, chunk_size: %d, total_size: %d", mChunkType, mChunkSize, mTotalSize);
+                    "type: %x, chunk_size: %d, total_size: %d", chunkType, chunkSize, totalSize);
         }
     }
 
@@ -69,30 +39,30 @@ public class SparseInputStream extends InputStream {
 
     private SparseChunk readChunk(InputStream in) throws IOException {
         SparseChunk chunk = new SparseChunk();
-        ByteBuffer buf = readBuffer(in, CHUNK_HDR_SIZE);
-        chunk.mChunkType = buf.getShort();
+        ByteBuffer buf = readBuffer(in, CHUNK_HEADER_SIZE);
+        chunk.chunkType = buf.getShort();
         buf.getShort();
-        chunk.mChunkSize = buf.getInt();
-        chunk.mTotalSize = buf.getInt();
+        chunk.chunkSize = buf.getInt();
+        chunk.totalSize = buf.getInt();
         return chunk;
     }
 
-    private BufferedInputStream mIn;
-    private boolean mIsSparse;
-    private long mBlockSize;
-    private long mTotalBlocks;
-    private long mTotalChunks;
-    private SparseChunk mCur;
-    private long mLeft;
-    private int mCurChunks;
+    private BufferedInputStream inputStream;
+    private boolean isSparse;
+    private long blockSize;
+    private long totalBlocks;
+    private long totalChunks;
+    private SparseChunk currentChunk;
+    private long remainingBytes;
+    private int currentChunks;
 
     public SparseInputStream(BufferedInputStream in) throws IOException {
-        mIn = in;
-        in.mark(FILE_HDR_SIZE * 2);
-        ByteBuffer buf = readBuffer(mIn, FILE_HDR_SIZE);
-        mIsSparse = (buf.getInt() == 0xed26ff3a);
-        if (!mIsSparse) {
-            mIn.reset();
+        inputStream = in;
+        in.mark(FILE_HEADER_SIZE * 2);
+        ByteBuffer buf = readBuffer(inputStream, FILE_HEADER_SIZE);
+        isSparse = (buf.getInt() == 0xed26ff3a);
+        if (!isSparse) {
+            inputStream.reset();
             return;
         }
         int major = buf.getShort();
@@ -102,84 +72,82 @@ public class SparseInputStream extends InputStream {
             throw new IOException("Unsupported sparse version: " + major + "." + minor);
         }
 
-        if (buf.getShort() != FILE_HDR_SIZE) {
+        if (buf.getShort() != FILE_HEADER_SIZE) {
             throw new IOException("Illegal file header size");
         }
-        if (buf.getShort() != CHUNK_HDR_SIZE) {
+        if (buf.getShort() != CHUNK_HEADER_SIZE) {
             throw new IOException("Illegal chunk header size");
         }
-        mBlockSize = buf.getInt();
-        if ((mBlockSize & 0x3) != 0) {
+        blockSize = buf.getInt();
+        if ((blockSize & 0x3) != 0) {
             throw new IOException("Illegal block size, must be a multiple of 4");
         }
-        mTotalBlocks = buf.getInt();
-        mTotalChunks = buf.getInt();
-        mLeft = mCurChunks = 0;
+        totalBlocks = buf.getInt();
+        totalChunks = buf.getInt();
+        remainingBytes = 0;
+        currentChunks = 0;
     }
 
-    /**
-     * Check if it needs to open a new chunk.
-     *
-     * @return true if it's EOF
-     */
     private boolean prepareChunk() throws IOException {
-        if (mCur == null || mLeft <= 0) {
-            if (++mCurChunks > mTotalChunks) return true;
-            mCur = readChunk(mIn);
-            if (mCur.mChunkType == SparseChunk.FILL) {
-                mCur.fill = readFull(mIn, 4);
+        if (currentChunk == null || remainingBytes <= 0) {
+            if (++currentChunks > totalChunks) return true;
+            currentChunk = readChunk(inputStream);
+            if (currentChunk.chunkType == SparseChunk.FILL) {
+                currentChunk.fill = readFull(inputStream, 4);
             }
-            mLeft = mCur.mChunkSize * mBlockSize;
+            remainingBytes = currentChunk.chunkSize * blockSize;
         }
-        return mLeft == 0;
+        return remainingBytes == 0;
     }
 
     @Override
     public int read(byte[] buf, int off, int len) throws IOException {
-        if (!mIsSparse) {
-            return mIn.read(buf, off, len);
+        if (!isSparse) {
+            return inputStream.read(buf, off, len```java
+        if (!isSparse) {
+            return inputStream.read(buf, off, len);
         }
         if (prepareChunk()) return -1;
         int n = -1;
-        switch (mCur.mChunkType) {
+        switch (currentChunk.chunkType) {
             case SparseChunk.RAW:
-                n = mIn.read(buf, off, (int) min(mLeft, len));
-                mLeft -= n;
+                n = inputStream.read(buf, off, (int) Math.min(remainingBytes, len));
+                remainingBytes -= n;
                 return n;
             case SparseChunk.DONTCARE:
-                n = (int) min(mLeft, len);
+                n = (int) Math.min(remainingBytes, len);
                 Arrays.fill(buf, off, off + n, (byte) 0);
-                mLeft -= n;
+                remainingBytes -= n;
                 return n;
             case SparseChunk.FILL:
-                // The FILL type is rarely used, so use a simple implmentation.
+                // The FILL type is rarely used, so use a simple implementation.
                 return super.read(buf, off, len);
             default:
-                throw new IOException("Unsupported Chunk:" + mCur.toString());
+                throw new IOException("Unsupported Chunk:" + currentChunk.toString());
         }
     }
 
     @Override
     public int read() throws IOException {
-        if (!mIsSparse) {
-            return mIn.read();
+        if (!isSparse) {
+            return inputStream.read();
         }
         if (prepareChunk()) return -1;
         int ret = -1;
-        switch (mCur.mChunkType) {
+        switch (currentChunk.chunkType) {
             case SparseChunk.RAW:
-                ret = mIn.read();
+                ret = inputStream.read();
                 break;
             case SparseChunk.DONTCARE:
                 ret = 0;
                 break;
             case SparseChunk.FILL:
-                ret = Byte.toUnsignedInt(mCur.fill[(4 - ((int) mLeft & 0x3)) & 0x3]);
+                ret = Byte.toUnsignedInt(currentChunk.fill[(4 - ((int) remainingBytes & 0x3)) & 0x3]);
                 break;
             default:
-                throw new IOException("Unsupported Chunk:" + mCur.toString());
+                throw new IOException("Unsupported Chunk:" + currentChunk.toString());
         }
-        mLeft--;
+        remainingBytes--;
         return ret;
     }
 
@@ -188,9 +156,9 @@ public class SparseInputStream extends InputStream {
      * @return -1 if unknown
      */
     public long getUnsparseSize() {
-        if (!mIsSparse) {
+        if (!isSparse) {
             return -1;
         }
-        return mBlockSize * mTotalBlocks;
+        return blockSize * totalBlocks;
     }
 }
