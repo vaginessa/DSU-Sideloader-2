@@ -141,56 +141,75 @@ class DSUInstaller(
             "Partition $partition installed, readOnly: $readOnly, partitionSize: $partitionSize",
         )
     }
-private fun installImage(
-    partition: String,
-    uncompressedSize: Long,
-    inputStream: InputStream,
-    readOnly: Boolean = true,
-) {
-    val sis = SparseInputStream(
-        BufferedInputStream(inputStream),
-    )
-    val partitionSize = if (sis.unsparseSize != -1L) sis.unsparseSize else uncompressedSize
-    onCreatePartition(partition)
-    createNewPartition(partition, partitionSize, readOnly)
-    onInstallationStepUpdate(InstallationStep.INSTALLING_ROOTED)
-    SharedMemory.create("dsu_buffer_$partition", Constants.SHARED_MEM_SIZE)
-        .use { sharedMemory ->
-            MappedMemoryBuffer(sharedMemory.mapReadWrite()).use { mappedBuffer ->
-                val fdDup = getFdDup(sharedMemory)
-                setAshmem(fdDup, sharedMemory.size.toLong())
-                publishProgress(0L, partitionSize, partition)
-                var installedSize: Long = 0
-                val readBuffer = ByteArray(sharedMemory.size)
-                val buffer = mappedBuffer.mBuffer
-                var numBytesRead: Int
-                while (0 < sis.read(readBuffer, 0, readBuffer.size)
-                        .also { numBytesRead = it }
-                ) {
-                    if (installationJob.isCancelled) {
-                        return
+
+    private fun installImage(
+        partition: String,
+        uncompressedSize: Long,
+        inputStream: InputStream,
+        readOnly: Boolean = true,
+    ) {
+        val sis = SparseInputStream(
+            BufferedInputStream(inputStream),
+        )
+        val partitionSize = if (sis.unsparseSize != -1L) sis.unsparseSize else uncompressedSize
+        onCreatePartition(partition)
+        createNewPartition(partition, partitionSize, readOnly)
+        onInstallationStepUpdate(InstallationStep.INSTALLING_ROOTED)
+        SharedMemory.create("dsu_buffer_$partition", Constants.SHARED_MEM_SIZE)
+            .use { sharedMemory ->
+                MappedMemoryBuffer(sharedMemory.mapReadWrite()).use { mappedBuffer ->
+                    val fdDup = getFdDup(sharedMemory)
+                    setAshmem(fdDup, sharedMemory.size.toLong())
+                    publishProgress(0L, partitionSize, partition)
+                    var installedSize: Long = 0
+                    val readBuffer = ByteArray(sharedMemory.size)
+                    val buffer = mappedBuffer.mBuffer
+                    var numBytesRead: Int
+                    while (0 < sis.read(readBuffer, 0, readBuffer.size)
+                            .also { numBytesRead = it }
+                    ) {
+                        if (installationJob.isCancelled) {
+                            return
+                        }
+                        buffer!!.position(0)
+                        buffer.put(readBuffer, 0, numBytesRead)
+                        submitFromAshmem(numBytesRead.toLong())
+                        installedSize += numBytesRead.toLong()
+                        publishProgress(installedSize, partitionSize, partition)
                     }
-                    buffer!!.position(0)
-                    buffer.put(readBuffer, 0, numBytesRead)
-                    submitFromAshmem(numBytesRead.toLong())
-                    installedSize += numBytesRead.toLong()
-                    publishProgress(installedSize, partitionSize, partition)
+                    publishProgress(partitionSize, partitionSize, partition)
                 }
-                publishProgress(partitionSize, partitionSize, partition)
+            }
+
+        if (!closePartition()) {
+            Log.d(tag, "Failed to install $partition partition")
+            onInstallationError(InstallationStep.ERROR_CREATE_PARTITION, partition)
+            return
+        }
+        Log.d(
+            tag,
+            "Partition $partition installed, readOnly: $readOnly, partitionSize: $partitionSize",
+        )
+    }
+
+    private fun installStreamingZipUpdate(inputStream: InputStream): Boolean {
+        val zis = ZipInputStream(inputStream)
+        var entry: ZipEntry?
+        while (zis.nextEntry.also { entry = it } != null) {
+            val fileName = entry!!.name
+            if (shouldInstallEntry(fileName)) {
+                installImageFromAnEntry(entry!!, zis)
+            } else {
+                Log.d(tag, "$fileName installation is not supported, skip it.")
+            }
+            if (installationJob.isCancelled) {
+                break
             }
         }
-
-    if (!closePartition()) {
-        Log.d(tag, "Failed to install $partition partition")
-        onInstallationError(InstallationStep.ERROR_CREATE_PARTITION, partition)
-        return
+        return true
     }
-    Log.d(
-        tag,
-        "Partition $partition installed, readOnly: $readOnly, partitionSize: $partitionSize",
-    )
-}
-private fun installImageFromAnEntry(entry: ZipEntry, inputStream: InputStream) {
+
+    private fun installImageFromAnEntry(entry: ZipEntry, inputStream: InputStream) {
         val fileName = entry.name
         Log.d(tag, "Installing: $fileName")
         val partitionName = fileName.substring(0, fileName.length - 4)
@@ -284,4 +303,3 @@ private fun installImageFromAnEntry(entry: ZipEntry, inputStream: InputStream) {
         startInstallation()
     }
 }
-
