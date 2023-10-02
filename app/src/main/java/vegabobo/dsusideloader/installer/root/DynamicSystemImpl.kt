@@ -4,9 +4,9 @@ import android.gsi.GsiProgress
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.os.image.IDynamicSystemService
-import vegabobo.dsusideloader.service.PrivilegedProvider
+import com.example.youroem.vendor.dsusideloader.service.PrivilegedProvider
 
-open class DynamicSystemImplementation : IDynamicSystemService {
+open class DynamicSystemImpl : IDynamicSystemService {
 
     override fun asBinder(): IBinder? {
         return null
@@ -16,28 +16,28 @@ open class DynamicSystemImplementation : IDynamicSystemService {
         return PrivilegedProvider.getService().installationProgress
     }
 
-    override fun abortInstallation(): Boolean {
-        return PrivilegedProvider.getService().abortInstallation()
+    override fun abort(): Boolean {
+        return PrivilegedProvider.getService().abort()
     }
 
-    override fun isSystemInUse(): Boolean {
-        return PrivilegedProvider.getService().isSystemInUse
+    override fun isInUse(): Boolean {
+        return PrivilegedProvider.getService().isInUse
     }
 
-    override fun isSystemInstalled(): Boolean {
-        return PrivilegedProvider.getService().isSystemInstalled
+    override fun isInstalled(): Boolean {
+        return PrivilegedProvider.getService().isInstalled
     }
 
-    override fun isSystemEnabled(): Boolean {
-        return PrivilegedProvider.getService().isSystemEnabled
+    override fun isEnabled(): Boolean {
+        return PrivilegedProvider.getService().isEnabled
     }
 
-    override fun removeSystem(): Boolean {
-        return PrivilegedProvider.getService().removeSystem()
+    override fun remove(): Boolean {
+        return PrivilegedProvider.getService().remove()
     }
 
-    override fun setSystemEnabled(enable: Boolean, oneShot: Boolean): Boolean {
-        return PrivilegedProvider.getService().setSystemEnabled(enable, oneShot)
+    override fun setEnable(enable: Boolean, oneShot: Boolean): Boolean {
+        return PrivilegedProvider.getService().setEnable(enable, oneShot)
     }
 
     override fun finishInstallation(): Boolean {
@@ -56,8 +56,8 @@ open class DynamicSystemImplementation : IDynamicSystemService {
         return PrivilegedProvider.getService().closePartition()
     }
 
-    override fun setAshmem(fileDescriptor: ParcelFileDescriptor, size: Long): Boolean {
-        return PrivilegedProvider.getService().setAshmem(fileDescriptor, size)
+    override fun setAshmem(fd: ParcelFileDescriptor, size: Long): Boolean {
+        return PrivilegedProvider.getService().setAshmem(fd, size)
     }
 
     override fun submitFromAshmem(bytes: Long): Boolean {
@@ -68,7 +68,7 @@ open class DynamicSystemImplementation : IDynamicSystemService {
         return PrivilegedProvider.getService().suggestScratchSize()
     }
 
-    fun forceStopDynamicSystemUpdate() {
+    fun forceStopDSU() {
         PrivilegedProvider.getService().forceStopPackage("com.android.dynsystem")
     }
 }
