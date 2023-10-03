@@ -208,10 +208,10 @@ class DSUInstaller(
         return true
     }
 
-    private fun installImageFromAnEntry(entry: ZipEntry, inputStream: InputStream) {
+   private fun installImageFromAnEntry(entry: ZipEntry, inputStream: InputStream) {
         val fileName = entry.name
         Log.d(tag, "Installing: $fileName")
-        val partitionName = fileName.substringBeforeLast(".")
+        val partitionName = fileName.substring(0, fileName.length - 4)
         val uncompressedSize = entry.size
         installImage(partitionName, uncompressedSize, inputStream)
     }
@@ -246,6 +246,19 @@ class DSUInstaller(
                 installStreamingZipUpdate(openInputStream(dsuInstallation.uri))
             }
 
+            Type.URL -> {
+                val url = URL(dsuInstallation.uri.toString())
+                installStreamingZipUpdate(url.openStream())
+            }
+
+            else -> {}
+        }
+        if (!installationJob.isCancelled) {
+            finishInstallation()
+            Log.d(tag, "Installation finished successfully.")
+            onInstallationSuccess()
+        }
+    }
 
     private fun installImages(images: List<ImagePartition>) {
         for (image in images) {
