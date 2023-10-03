@@ -4,7 +4,7 @@ import android.gsi.GsiProgress
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.os.image.IDynamicSystemService
-import com.example.youroem.vendor.dsusideloader.service.PrivilegedProvider
+import vegabobo.dsusideloader.service.PrivilegedProvider
 
 open class DynamicSystemImpl : IDynamicSystemService {
 
