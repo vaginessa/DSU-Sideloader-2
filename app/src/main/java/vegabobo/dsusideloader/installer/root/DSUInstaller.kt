@@ -8,7 +8,6 @@ import android.os.SharedMemory
 import android.util.Log
 import java.io.BufferedInputStream
 import java.io.InputStream
-import java.net.URL
 import java.nio.ByteBuffer
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
@@ -94,7 +93,7 @@ class DSUInstaller(
         if (!name.endsWith(".img")) {
             return false
         }
-        val partitionName = name.substringAfterLast(".")
+        val partitionName = name.substringBeforeLast(".")
         return isPartitionSupported(partitionName)
     }
 
@@ -212,7 +211,7 @@ class DSUInstaller(
     private fun installImageFromAnEntry(entry: ZipEntry, inputStream: InputStream) {
         val fileName = entry.name
         Log.d(tag, "Installing: $fileName")
-        val partitionName = fileName.substring(0, fileName.length - 4)
+        val partitionName = fileName.substringBeforeLast(".")
         val uncompressedSize = entry.size
         installImage(partitionName, uncompressedSize, inputStream)
     }
