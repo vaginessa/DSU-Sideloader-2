@@ -246,19 +246,6 @@ class DSUInstaller(
                 installStreamingZipUpdate(openInputStream(dsuInstallation.uri))
             }
 
-            Type.URL -> {
-                val url = URL(dsuInstallation.uri.toString())
-                installStreamingZipUpdate(url.openStream())
-            }
-
-            else -> {}
-        }
-        if (!installationJob.isCancelled) {
-            finishInstallation()
-            Log.d(tag, "Installation finished successfully.")
-            onInstallationSuccess()
-        }
-    }
 
     private fun installImages(images: List<ImagePartition>) {
         for (image in images) {
