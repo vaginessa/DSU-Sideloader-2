@@ -246,7 +246,7 @@ class DSUInstaller(
                 installStreamingZipUpdate(openInputStream(dsuInstallation.uri))
             }
 
-            Type.URL -> {
+             Type.URL -> {
                 val url = URL(dsuInstallation.uri.toString())
                 installStreamingZipUpdate(url.openStream())
             }
