@@ -31,3 +31,4 @@ jobs:
       with:
         name: outputs-apk-minidebug
         path: app/build/outputs/apk/miniDebug
+        
